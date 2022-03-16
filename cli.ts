@@ -1,11 +1,13 @@
 // Requires: --allow-env --allow-write --allow-read --allow-net
 
-import { encode, logger, parse, readAll } from "./deps.ts";
+import { encode, parse, readAll } from "./deps.ts";
 
 (async () => {
-    logger.info("Starting Postgres Dumper...\n")
+    console.info("Starting Postgres Dumper...\n")
 
     const tmp = Deno.env.get("TMPDIR") || Deno.env.get("TMP") || Deno.env.get("TEMP") || "/tmp";
+
+    console.info("Temp dir is " + tmp)
 
     const aliases = {
         dbName: "N",
@@ -30,14 +32,18 @@ import { encode, logger, parse, readAll } from "./deps.ts";
     if (!repo) throw new Error("GitHub Repo must be provided (use -R <repo>)")
     if (!token) throw new Error("GitHub Token must be provided (use -T <token>)")
 
-    const fileName = `dump-${dbName}-${date.toTimeString()}.bck`
+    const fileName = `dump-${dbName}-${date.toISOString()}.bck`
     
-    logger.info("Creating dump process...")
+    console.info(`Creating dump process, file will be saved on ${tmp}/${fileName}...`)
+
+    const command = ["pg_dump", "-Z5", "-Fc", `${dbName}`, "-f", `${tmp}/${fileName}`]
+
+    console.info("Executing process with command " + command.join(" "))
+
     const p = Deno.run({
-        cmd: ["pg_dump", "-Z5", "-Fc", dbName, ">", tmp+"/"+fileName],
-        stdout: "piped",
-        stderr: "piped",
-        stdin: "piped"
+        cmd: command,
+        stdout: "inherit",
+        stderr: "inherit"
     })
     
     const code = await p.status()
@@ -46,20 +52,21 @@ import { encode, logger, parse, readAll } from "./deps.ts";
         throw new Error("Non-successful status code from process: " + code.code)
     }
 
-    logger.info(`Dump created on ${tmp}/${fileName}`)
+    console.info(`Dump created on ${tmp}/${fileName}`)
 
-    logger.info(`B64 encoding file ${tmp}/${fileName}...`)
+    console.info(`B64 encoding file ${tmp}/${fileName}...`)
     const file = await Deno.open(tmp + "/" + fileName)
     const encoded = encode(await readAll(file))
-    logger.info(`${tmp}/${fileName} encoded!`)
+    console.info(`${tmp}/${fileName} encoded!`)
 
     const data = {
-        "message": `Upload backup from ${dbName} at ${date.toTimeString()}`,
+        "message": `Upload backup from ${dbName} at ${date.toISOString()}`,
         "content": encoded
     }
 
-    logger.info(`Uploading file to GitHub...`)
+    console.info(`Uploading file to GitHub...`)
     const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${fileName}`, {
+        method: "PUT",
         headers: {
             "Authorization": `token ${token}`
         },
@@ -72,10 +79,10 @@ import { encode, logger, parse, readAll } from "./deps.ts";
 
     const json = await res.json()
 
-    logger.info(`File upload successfully to GitHub, response:`)
-    logger.info(json)
-    logger.info("\n")
-    logger.info("Done!\n")
+    console.info(`File upload successfully to GitHub, response:`)
+    console.info(json)
+    console.info("\n")
+    console.info("Done!\n")
 
 
 })()
