@@ -3,6 +3,8 @@
 import { encode, parse, readAll } from "./deps.ts";
 
 (async () => {
+    const date = new Date()
+    
     console.info("Starting Postgres Dumper...\n")
 
     const tmp = Deno.env.get("TMPDIR") || Deno.env.get("TMP") || Deno.env.get("TEMP") || "/tmp";
@@ -15,8 +17,6 @@ import { encode, parse, readAll } from "./deps.ts";
         repo: "R",
         token: "T"
     }
-
-    const date = new Date()
 
     const args = parse(Deno.args, {
         alias: aliases
