@@ -1,1 +1,2 @@
-pgsql-dumper-linux-x86_64
+/bin
+*.pgpass
