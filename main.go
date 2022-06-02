@@ -1,35 +1,128 @@
 package main
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/gurkankaymak/hocon"
 )
 
 var (
-	useHelp bool
-
-	actor  string
-	repo   string
-	token  string
-	dbName string
+	config   *Config
+	filePath string
 )
 
-const (
-	apiUrl = "https://api.github.com"
-)
+type DatabaseConfig struct {
+	Name string
+}
+
+type S3Config struct {
+	Endpoint        string
+	Bucket          string
+	SecretAccessKey string
+	AccessKeyId     string
+	Region          string
+}
+
+type Config struct {
+	S3       S3Config
+	Database DatabaseConfig
+}
 
 type PutRequest struct {
 	Message string `json:"message"`
 	Content string `json:"content"`
+}
+
+func init() {
+	var useHelp bool
+	flag.BoolVar(&useHelp, "help", false, "Show this help menu.")
+
+	flag.StringVar(&filePath, "file", "./psql.conf", "Select where is located config file.")
+
+	flag.Parse()
+
+	if useHelp {
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
+
+	file, err := filepath.Abs(filePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	conf, err := hocon.ParseResource(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	config = &Config{
+		Database: DatabaseConfig{
+			Name: conf.GetString("database.db_name"),
+		},
+		S3: S3Config{
+			Endpoint:        conf.GetString("s3.endpoint"),
+			Bucket:          conf.GetString("s3.bucket"),
+			Region:          conf.GetString("s3.region"),
+			AccessKeyId:     conf.GetString("s3.access_key_id"),
+			SecretAccessKey: conf.GetString("s3.secret_access_key"),
+		},
+	}
+
+	if config.Database.Name == "" {
+		config.Database.Name = "postgres"
+	}
+
+	if config.S3.Region == "" {
+		config.S3.Region = "auto"
+	}
+
+	if config.S3.Endpoint == "" {
+		log.Fatalf("s3 endpoint not defined on %s", file)
+	}
+
+	if config.S3.Bucket == "" {
+		log.Fatalf("s3 bucket not defined on %s", file)
+	}
+
+	if config.S3.AccessKeyId == "" {
+		log.Fatalf("s3 accessKeyId not defined on %s", file)
+	}
+
+	if config.S3.SecretAccessKey == "" {
+		log.Fatalf("s3 secretAccessKey not defined on %s", file)
+	}
+
+	log.Printf("%v#", config)
+}
+
+func prepareS3Connection() *s3manager.Uploader {
+	awsConfig := aws.NewConfig()
+
+	awsConfig.WithRegion(config.S3.Region)
+	awsConfig.WithEndpoint(config.S3.Endpoint)
+	awsConfig.WithCredentials(credentials.NewCredentials(&credentials.StaticProvider{
+		Value: credentials.Value{
+			AccessKeyID:     config.S3.AccessKeyId,
+			SecretAccessKey: config.S3.SecretAccessKey,
+		},
+	}))
+
+	sess := session.Must(session.NewSession(awsConfig))
+
+	return s3manager.NewUploader(sess)
 }
 
 func main() {
@@ -43,45 +136,16 @@ func main() {
 	}
 
 	if info.Username != "postgres" {
-		log.Fatal("This command needs to be launched by 'postgres' user.")
+		log.Fatal("this command needs to be launched by 'postgres' user.")
 	}
 
-	flag.BoolVar(&useHelp, "help", false, "Show this help menu.")
-	flag.StringVar(&actor, "actor", "", "The GitHub repository actor.")
-	flag.StringVar(&repo, "repo", "", "The GitHub repository name.")
-	flag.StringVar(&token, "token", "", "The GitHub Personal Access Token.")
-	flag.StringVar(&dbName, "db", "", "The name of the database to backup.")
-
-	flag.Parse()
-
-	if useHelp {
-		flag.PrintDefaults()
-		os.Exit(0)
-	}
-
-	if len(actor) < 1 {
-		log.Fatal("Actor cannot be empty, use --help.")
-	}
-
-	if len(repo) < 1 {
-		log.Fatal("Repo cannot be empty, use --help.")
-	}
-
-	if len(token) < 1 {
-		log.Fatal("Token cannot be empty, use --help.")
-	}
-
-	if len(dbName) < 1 {
-		log.Fatal("Database Name cannot be empty, use --help.")
-	}
-
-	log.Printf("Creating backup from database '%s'...\n", dbName)
+	log.Printf("creating backup from database '%s'...\n", config.Database.Name)
 
 	tempDir := os.TempDir()
-	fileName := fmt.Sprintf("dump-%s-%s.backup", dbName, formattedDate)
+	fileName := fmt.Sprintf("dump-%s-%s.backup", config.Database.Name, formattedDate)
 	destination := fmt.Sprintf("%s/%s", tempDir, fileName)
 
-	cmd := exec.Command("pg_dump", "-Z5", "-Fc", dbName, "-f", destination)
+	cmd := exec.Command("pg_dump", "-Z5", "-Fc", config.Database.Name, "-f", destination)
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -90,20 +154,33 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("Backup created successfully on %s.\n", destination)
-	log.Printf("Encoding file to Base64...\n")
+	log.Printf("backup created successfully on %s.\n", destination)
+	log.Printf("encoding file to Base64...\n")
 
 	content, err := os.ReadFile(destination)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	encodedFile := base64.StdEncoding.EncodeToString(content)
+	uploader := prepareS3Connection()
+
+	result, err := uploader.Upload(&s3manager.UploadInput{
+		Bucket: &config.S3.Bucket,
+		Key:    &fileName,
+		Body:   strings.NewReader(string(content)),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("file uploaded to, %s\n", aws.StringValue(&result.Location))
+
+	/*encodedFile := base64.StdEncoding.EncodeToString(content)
 
 	log.Printf("Uploading encoded backup to GitHub Repository %s/%s...\n", actor, repo)
 
 	body := PutRequest{
-		Message: fmt.Sprintf("Upload backup from %s at %s", dbName, formattedDate),
+		Message: fmt.Sprintf("Upload backup from %s at %s", config.Database.Name, formattedDate),
 		Content: encodedFile,
 	}
 
@@ -130,6 +207,6 @@ func main() {
 		log.Fatal(resp.Status)
 	}
 
-	log.Printf("Successfully uploaded encoded backup to GitHub.\n\n")
+	log.Printf("Successfully uploaded encoded backup to GitHub.\n\n")*/
 
 }

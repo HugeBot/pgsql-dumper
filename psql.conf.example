@@ -1,0 +1,11 @@
+database {
+    db_name: ""
+}
+
+s3 {
+    bucket: ""
+    endpoint: ""
+    access_key_id: ""
+    secret_access_key: ""
+    region: ""
+}
