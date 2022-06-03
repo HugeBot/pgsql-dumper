@@ -155,16 +155,13 @@ func main() {
 	}
 
 	log.Printf("backup created successfully on %s.\n", destination)
-	log.Printf("encoding file to Base64...\n")
 
 	content, err := os.ReadFile(destination)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	uploader := prepareS3Connection()
-
-	result, err := uploader.Upload(&s3manager.UploadInput{
+	result, err := prepareS3Connection().Upload(&s3manager.UploadInput{
 		Bucket: &config.S3.Bucket,
 		Key:    &fileName,
 		Body:   strings.NewReader(string(content)),
@@ -174,39 +171,4 @@ func main() {
 	}
 
 	log.Printf("file uploaded to, %s\n", aws.StringValue(&result.Location))
-
-	/*encodedFile := base64.StdEncoding.EncodeToString(content)
-
-	log.Printf("Uploading encoded backup to GitHub Repository %s/%s...\n", actor, repo)
-
-	body := PutRequest{
-		Message: fmt.Sprintf("Upload backup from %s at %s", config.Database.Name, formattedDate),
-		Content: encodedFile,
-	}
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(body); err != nil {
-		log.Fatal(err)
-	}
-
-	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/repos/%s/%s/contents/%s", apiUrl, actor, repo, fileName), &buf)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	req.Header.Add("Authorization", fmt.Sprintf("token %s", token))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 201 {
-		log.Fatal(resp.Status)
-	}
-
-	log.Printf("Successfully uploaded encoded backup to GitHub.\n\n")*/
-
 }
