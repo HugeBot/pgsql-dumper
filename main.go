@@ -46,6 +46,8 @@ type PutRequest struct {
 }
 
 func init() {
+	date := time.Now()
+	
 	var useHelp bool
 	flag.BoolVar(&useHelp, "help", false, "Show this help menu.")
 
@@ -126,8 +128,6 @@ func prepareS3Connection() *s3manager.Uploader {
 }
 
 func main() {
-
-	date := time.Now()
 	formattedDate := date.Format(time.RFC3339)
 
 	info, err := user.Current()
