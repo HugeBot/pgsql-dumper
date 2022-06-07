@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"log"
@@ -8,7 +9,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,6 +21,7 @@ import (
 var (
 	config   *Config
 	filePath string
+	date     time.Time
 )
 
 type DatabaseConfig struct {
@@ -46,8 +47,8 @@ type PutRequest struct {
 }
 
 func init() {
-	date := time.Now()
-	
+	date = time.Now()
+
 	var useHelp bool
 	flag.BoolVar(&useHelp, "help", false, "Show this help menu.")
 
@@ -88,11 +89,7 @@ func init() {
 	}
 
 	if config.S3.Region == "" {
-		config.S3.Region = "auto"
-	}
-
-	if config.S3.Endpoint == "" {
-		log.Fatalf("s3 endpoint not defined on %s", file)
+		log.Fatalf("s3 region not defined on %s", file)
 	}
 
 	if config.S3.Bucket == "" {
@@ -106,8 +103,16 @@ func init() {
 	if config.S3.SecretAccessKey == "" {
 		log.Fatalf("s3 secretAccessKey not defined on %s", file)
 	}
+}
 
-	log.Printf("%v#", config)
+func printBanner() {
+	fmt.Println(`
+    ┌───────────────────────────────────────────────────┐
+    │                    PSQL DUMPER                    │
+    │                                                   │
+    │       https://github.com/HugeBot/psql-dumper      │
+    └───────────────────────────────────────────────────┘
+	`)
 }
 
 func prepareS3Connection() *s3manager.Uploader {
@@ -115,19 +120,18 @@ func prepareS3Connection() *s3manager.Uploader {
 
 	awsConfig.WithRegion(config.S3.Region)
 	awsConfig.WithEndpoint(config.S3.Endpoint)
-	awsConfig.WithCredentials(credentials.NewCredentials(&credentials.StaticProvider{
-		Value: credentials.Value{
-			AccessKeyID:     config.S3.AccessKeyId,
-			SecretAccessKey: config.S3.SecretAccessKey,
-		},
-	}))
+	awsConfig.WithCredentials(credentials.NewStaticCredentials(config.S3.AccessKeyId, config.S3.SecretAccessKey, ""))
 
 	sess := session.Must(session.NewSession(awsConfig))
+
+	log.Println("successfully conected with S3 bucket")
 
 	return s3manager.NewUploader(sess)
 }
 
 func main() {
+	printBanner()
+
 	formattedDate := date.Format(time.RFC3339)
 
 	info, err := user.Current()
@@ -162,9 +166,9 @@ func main() {
 	}
 
 	result, err := prepareS3Connection().Upload(&s3manager.UploadInput{
-		Bucket: &config.S3.Bucket,
-		Key:    &fileName,
-		Body:   strings.NewReader(string(content)),
+		Bucket: aws.String(config.S3.Bucket),
+		Key:    aws.String(fileName),
+		Body:   aws.ReadSeekCloser(bytes.NewReader(content)),
 	})
 	if err != nil {
 		log.Fatal(err)
