@@ -141,9 +141,9 @@ func buildCommand(destination string) *exec.Cmd {
 		}
 
 		if config.Database.Password != "" {
-			cmdArray = append(cmdArray, fmt.Sprintf("\"PGPASSWORD=%s", config.Database.Password), baseCommand)
+			cmdArray = append(cmdArray, fmt.Sprintf("'PGPASSWORD=%s", config.Database.Password), baseCommand)
 		} else {
-			cmdArray = append(cmdArray, fmt.Sprintf("\"%s", baseCommand))
+			cmdArray = append(cmdArray, fmt.Sprintf("'%s", baseCommand))
 		}
 
 		if config.Database.Username != "" {
@@ -153,9 +153,9 @@ func buildCommand(destination string) *exec.Cmd {
 		}
 
 		if config.Database.Name != "all" {
-			cmdArray = append(cmdArray, fmt.Sprintf("%s\"", config.Database.Name), ">", destination)
+			cmdArray = append(cmdArray, fmt.Sprintf("%s'", config.Database.Name), ">", destination)
 		} else {
-			cmdArray = append(cmdArray, "\"", ">", destination)
+			cmdArray = append(cmdArray, "'", ">", destination)
 		}
 
 		return exec.Command(cmdArray[0], cmdArray[1:]...)
