@@ -154,9 +154,9 @@ func buildCommand(destination string) *exec.Cmd {
 
 		if config.Database.Name != "all" {
 			cmdArray = append(cmdArray, fmt.Sprintf("%s\"", config.Database.Name), ">", destination)
+		} else {
+			cmdArray = append(cmdArray, "\"", ">", destination)
 		}
-
-		cmdArray = append(cmdArray, "\"", ">", destination)
 
 		return exec.Command(cmdArray[0], cmdArray[1:]...)
 	}
