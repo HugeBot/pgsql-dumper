@@ -81,9 +81,9 @@ func init() {
 
 	if config.Database.Name == "" {
 		config.Database.Name = "all"
-		baseCommand = "/usr/bin/pg_dump_all"
+		baseCommand = "pg_dumpall"
 	} else {
-		baseCommand = "/usr/bin/pg_dump"
+		baseCommand = "pg_dump"
 	}
 
 	if config.S3.Region == "" {
@@ -141,9 +141,9 @@ func buildCommand(destination string) *exec.Cmd {
 		}
 
 		if config.Database.Password != "" {
-			cmdArray = append(cmdArray, fmt.Sprintf("\"PGPASSWORD=%s", config.Database.Password), "pg_dump")
+			cmdArray = append(cmdArray, fmt.Sprintf("\"PGPASSWORD=%s", config.Database.Password), baseCommand)
 		} else {
-			cmdArray = append(cmdArray, "\"pg_dump")
+			cmdArray = append(cmdArray, fmt.Sprintf("\"%s", baseCommand))
 		}
 
 		if config.Database.Username != "" {
@@ -152,7 +152,11 @@ func buildCommand(destination string) *exec.Cmd {
 			cmdArray = append(cmdArray, "--username", "postgres")
 		}
 
-		cmdArray = append(cmdArray, fmt.Sprintf("%s\"", config.Database.Name), ">", destination)
+		if config.Database.Name != "all" {
+			cmdArray = append(cmdArray, fmt.Sprintf("%s\"", config.Database.Name), ">", destination)
+		}
+
+		cmdArray = append(cmdArray, "\"", ">", destination)
 
 		return exec.Command(cmdArray[0], cmdArray[1:]...)
 	}
