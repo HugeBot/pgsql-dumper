@@ -152,6 +152,8 @@ func buildCommand(destination string) *exec.Cmd {
 			cmdArray = append(cmdArray, "--username", "postgres")
 		}
 
+		cmdArray = append(cmdArray, "-Z5", "-Fc")
+
 		if config.Database.Name != "all" {
 			cmdArray = append(cmdArray, fmt.Sprintf("%s'", config.Database.Name), ">", destination)
 		} else {
