@@ -1,7 +1,9 @@
 database:
   name:
-  username: # Used with --container
-  password: # Used with --container
+  username:
+  password:
+  host:
+  port:
 
 s3:
   bucket:

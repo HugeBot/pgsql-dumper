@@ -20,11 +20,12 @@ import (
 )
 
 var (
-	config      *Config
-	filePath    string
-	date        time.Time
-	baseCommand string
-	containerId string
+	config       *Config
+	filePath     string
+	date         time.Time
+	baseCommand  string
+	containerId  string
+	allDatabases bool
 )
 
 type Config struct {
@@ -39,6 +40,8 @@ type Config struct {
 		Name     string `yaml:"name"`
 		Username string `yaml:"username"`
 		Password string `yaml:"password"`
+		Host     string `yaml:"host"`
+		Port     int    `yaml:"port"`
 	} `yaml:"database"`
 }
 
@@ -47,23 +50,7 @@ type PutRequest struct {
 	Content string `json:"content"`
 }
 
-func init() {
-	date = time.Now()
-
-	var useHelp bool
-	flag.BoolVar(&useHelp, "help", false, "Show this help menu.")
-
-	flag.StringVar(&filePath, "config", "./config.yml", "Select where is located config file.")
-
-	flag.StringVar(&containerId, "container", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
-
-	flag.Parse()
-
-	if useHelp {
-		flag.PrintDefaults()
-		os.Exit(0)
-	}
-
+func (c *Config) init() {
 	file, err := filepath.Abs(filePath)
 	if err != nil {
 		log.Fatal(err)
@@ -80,10 +67,29 @@ func init() {
 	}
 
 	if config.Database.Name == "" {
+		if !allDatabases {
+			log.Fatalf("database name not defined on %s", file)
+		}
 		config.Database.Name = "all"
 		baseCommand = "pg_dumpall"
 	} else {
 		baseCommand = "pg_dump"
+	}
+
+	if config.Database.Host == "" {
+		config.Database.Host = "127.0.0.1"
+	}
+
+	if config.Database.Port == 0 {
+		config.Database.Port = 5432
+	}
+
+	if config.Database.Username == "" {
+		log.Fatalf("database username not defined on %s", file)
+	}
+
+	if config.Database.Password == "" {
+		log.Fatalf("database password not defined on %s", file)
 	}
 
 	if config.S3.Region == "" {
@@ -101,6 +107,27 @@ func init() {
 	if config.S3.AccessKeySecret == "" {
 		log.Fatalf("s3 secretAccessKey not defined on %s", file)
 	}
+}
+
+func init() {
+	date = time.Now()
+
+	var useHelp bool
+	flag.BoolVar(&useHelp, "help", false, "Show this help menu.")
+	flag.BoolVar(&allDatabases, "all", false, "If defined will be dumped all the databases (pg_dumpall instead of pg_dump)")
+
+	flag.StringVar(&filePath, "config", "./config.yml", "Select where is located config file.")
+
+	flag.StringVar(&containerId, "container", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
+
+	flag.Parse()
+
+	if useHelp {
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
+
+	config.init()
 }
 
 func printBanner() {
@@ -127,40 +154,14 @@ func prepareS3Connection() *s3manager.Uploader {
 	return s3manager.NewUploader(sess)
 }
 
+// pg_dump -Z5 -Fc --dbname=postgresql://postgres:postgres@127.0.0.1:5432/hugebot
 func buildCommand(destination string) *exec.Cmd {
 	if containerId == "" {
-		return exec.Command(baseCommand, "-Z5", "-Fc", config.Database.Name, "-f", destination)
+		return exec.Command(baseCommand, "-Z5", "-Fc")
+	} else if allDatabases {
+		return exec.Command("docker", "exec", containerId, baseCommand, fmt.Sprintf("--dbname=postgresql://%s:%s@%s:%d", config.Database.Username, config.Database.Password, config.Database.Host, config.Database.Port))
 	} else {
-		cmdArray := []string{
-			"docker",
-			"exec",
-			"-i",
-			containerId,
-			"/bin/bash",
-			"-c",
-		}
-
-		if config.Database.Password != "" {
-			cmdArray = append(cmdArray, fmt.Sprintf("'PGPASSWORD=%s", config.Database.Password), baseCommand)
-		} else {
-			cmdArray = append(cmdArray, fmt.Sprintf("'%s", baseCommand))
-		}
-
-		if config.Database.Username != "" {
-			cmdArray = append(cmdArray, "--username", config.Database.Username)
-		} else {
-			cmdArray = append(cmdArray, "--username", "postgres")
-		}
-
-		cmdArray = append(cmdArray, "-Z5", "-Fc")
-
-		if config.Database.Name != "all" {
-			cmdArray = append(cmdArray, fmt.Sprintf("%s'", config.Database.Name), ">", destination)
-		} else {
-			cmdArray = append(cmdArray, "'", ">", destination)
-		}
-
-		return exec.Command(cmdArray[0], cmdArray[1:]...)
+		return exec.Command("docker", "exec", containerId, baseCommand, "-Z5", "-Fc", fmt.Sprintf("--dbname=postgresql://%s:%s@%s:%d/%s", config.Database.Username, config.Database.Password, config.Database.Host, config.Database.Port, config.Database.Name))
 	}
 }
 
@@ -187,18 +188,10 @@ func main() {
 	destination := fmt.Sprintf("%s/%s", tempDir, fileName)
 
 	cmd := buildCommand(destination)
-
-	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	log.Printf("Running command %v\n", cmd.Args)
-	if err := cmd.Run(); err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("backup created successfully on %s.\n", destination)
-
-	content, err := os.ReadFile(destination)
+	out, err := cmd.Output()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -206,7 +199,7 @@ func main() {
 	result, err := prepareS3Connection().Upload(&s3manager.UploadInput{
 		Bucket: aws.String(config.S3.Bucket),
 		Key:    aws.String(fileName),
-		Body:   aws.ReadSeekCloser(bytes.NewReader(content)),
+		Body:   aws.ReadSeekCloser(bytes.NewReader(out)),
 	})
 	if err != nil {
 		log.Fatal(err)
