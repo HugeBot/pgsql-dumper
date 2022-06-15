@@ -1,0 +1,11 @@
+database:
+  name:
+  username: # Used with --container
+  password: # Used with --container
+
+s3:
+  bucket:
+  endpoint:
+  access_key_id:
+  secret_access_key:
+  region:

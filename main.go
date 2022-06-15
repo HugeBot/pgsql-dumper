@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -15,30 +16,30 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/gurkankaymak/hocon"
+	"gopkg.in/yaml.v2"
 )
 
 var (
-	config   *Config
-	filePath string
-	date     time.Time
+	config      *Config
+	filePath    string
+	date        time.Time
+	baseCommand string
+	containerId string
 )
 
-type DatabaseConfig struct {
-	Name string
-}
-
-type S3Config struct {
-	Endpoint        string
-	Bucket          string
-	SecretAccessKey string
-	AccessKeyId     string
-	Region          string
-}
-
 type Config struct {
-	S3       S3Config
-	Database DatabaseConfig
+	S3 struct {
+		Endpoint        string `yaml:"endpoint"`
+		Bucket          string `yaml:"bucket"`
+		AccessKeyId     string `yaml:"accessKeyId"`
+		AccessKeySecret string `yaml:"accessKeySecret"`
+		Region          string `yaml:"region"`
+	} `yaml:"s3"`
+	Database struct {
+		Name     string `yaml:"name"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+	} `yaml:"database"`
 }
 
 type PutRequest struct {
@@ -52,7 +53,9 @@ func init() {
 	var useHelp bool
 	flag.BoolVar(&useHelp, "help", false, "Show this help menu.")
 
-	flag.StringVar(&filePath, "file", "./psql.conf", "Select where is located config file.")
+	flag.StringVar(&filePath, "file", "./config.yml", "Select where is located config file.")
+
+	flag.StringVar(&containerId, "container", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
 
 	flag.Parse()
 
@@ -66,26 +69,21 @@ func init() {
 		log.Fatal(err)
 	}
 
-	conf, err := hocon.ParseResource(file)
+	yamlFile, err := ioutil.ReadFile(file)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	config = &Config{
-		Database: DatabaseConfig{
-			Name: conf.GetString("database.db_name"),
-		},
-		S3: S3Config{
-			Endpoint:        conf.GetString("s3.endpoint"),
-			Bucket:          conf.GetString("s3.bucket"),
-			Region:          conf.GetString("s3.region"),
-			AccessKeyId:     conf.GetString("s3.access_key_id"),
-			SecretAccessKey: conf.GetString("s3.secret_access_key"),
-		},
+	err = yaml.Unmarshal(yamlFile, &config)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	if config.Database.Name == "" {
-		config.Database.Name = "postgres"
+		config.Database.Name = "all"
+		baseCommand = "/usr/bin/pg_dump_all"
+	} else {
+		baseCommand = "/usr/bin/pg_dump"
 	}
 
 	if config.S3.Region == "" {
@@ -100,7 +98,7 @@ func init() {
 		log.Fatalf("s3 accessKeyId not defined on %s", file)
 	}
 
-	if config.S3.SecretAccessKey == "" {
+	if config.S3.AccessKeySecret == "" {
 		log.Fatalf("s3 secretAccessKey not defined on %s", file)
 	}
 }
@@ -120,7 +118,7 @@ func prepareS3Connection() *s3manager.Uploader {
 
 	awsConfig.WithRegion(config.S3.Region)
 	awsConfig.WithEndpoint(config.S3.Endpoint)
-	awsConfig.WithCredentials(credentials.NewStaticCredentials(config.S3.AccessKeyId, config.S3.SecretAccessKey, ""))
+	awsConfig.WithCredentials(credentials.NewStaticCredentials(config.S3.AccessKeyId, config.S3.AccessKeySecret, ""))
 
 	sess := session.Must(session.NewSession(awsConfig))
 
@@ -129,18 +127,51 @@ func prepareS3Connection() *s3manager.Uploader {
 	return s3manager.NewUploader(sess)
 }
 
+func buildCommand(destination string) *exec.Cmd {
+	if containerId == "" {
+		return exec.Command(baseCommand, "-Z5", "-Fc", config.Database.Name, "-f", destination)
+	} else {
+		cmdArray := []string{
+			"docker",
+			"exec",
+			"-i",
+			containerId,
+			"/bin/bash",
+			"-c",
+		}
+
+		if config.Database.Password != "" {
+			cmdArray = append(cmdArray, fmt.Sprintf("\"PGPASSWORD=%s", config.Database.Password), "pg_dump")
+		} else {
+			cmdArray = append(cmdArray, "\"pg_dump")
+		}
+
+		if config.Database.Username != "" {
+			cmdArray = append(cmdArray, "--username", config.Database.Username)
+		} else {
+			cmdArray = append(cmdArray, "--username", "postgres")
+		}
+
+		cmdArray = append(cmdArray, fmt.Sprintf("%s\"", config.Database.Name), ">", destination)
+
+		return exec.Command(cmdArray[0], cmdArray[1:]...)
+	}
+}
+
 func main() {
 	printBanner()
 
 	formattedDate := date.Format(time.RFC3339)
 
-	info, err := user.Current()
-	if err != nil {
-		log.Fatal(err)
-	}
+	if containerId == "" {
+		info, err := user.Current()
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	if info.Username != "postgres" {
-		log.Fatal("this command needs to be launched by 'postgres' user.")
+		if info.Username != "postgres" {
+			log.Fatal("this command needs to be launched by 'postgres' user or with '--container <container name or id>' flag.")
+		}
 	}
 
 	log.Printf("creating backup from database '%s'...\n", config.Database.Name)
@@ -149,11 +180,12 @@ func main() {
 	fileName := fmt.Sprintf("dump-%s-%s.backup", config.Database.Name, formattedDate)
 	destination := fmt.Sprintf("%s/%s", tempDir, fileName)
 
-	cmd := exec.Command("pg_dump", "-Z5", "-Fc", config.Database.Name, "-f", destination)
+	cmd := buildCommand(destination)
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
+	log.Printf("Running command %v\n", cmd.Args)
 	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
 	}

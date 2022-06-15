@@ -1,4 +1,7 @@
 /bin
 *.pgpass
 
-*.conf
+*.yaml
+*.yml
+!*.example.yaml
+!*.example.yml
