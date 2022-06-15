@@ -53,7 +53,7 @@ func init() {
 	var useHelp bool
 	flag.BoolVar(&useHelp, "help", false, "Show this help menu.")
 
-	flag.StringVar(&filePath, "file", "./config.yml", "Select where is located config file.")
+	flag.StringVar(&filePath, "config", "./config.yml", "Select where is located config file.")
 
 	flag.StringVar(&containerId, "container", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
 
