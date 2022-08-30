@@ -1,4 +1,4 @@
-module hugebot/psql-dumper
+module github.com/HugeBot/psql-dumper
 
 go 1.18
 
