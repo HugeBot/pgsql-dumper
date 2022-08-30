@@ -19,6 +19,12 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const (
+	versionMajor = 0
+	versionMinor = 3
+	versionPath  = 0
+)
+
 var (
 	config       *Config
 	filePath     string
@@ -27,6 +33,8 @@ var (
 	containerId  string
 	containerCLI string
 	allDatabases bool
+
+	version = fmt.Sprintf("%d.%d.%d", versionMajor, versionMinor, versionPath)
 )
 
 type Config struct {
@@ -133,13 +141,13 @@ func init() {
 }
 
 func printBanner() {
-	fmt.Println(`
+	fmt.Printf(`
     ┌───────────────────────────────────────────────────┐
-    │                    PSQL DUMPER                    │
+    │                    PSQL DUMPER v%s              │
     │                                                   │
     │       https://github.com/HugeBot/psql-dumper      │
     └───────────────────────────────────────────────────┘
-	`)
+	`, version)
 }
 
 func prepareS3Connection() *s3manager.Uploader {
