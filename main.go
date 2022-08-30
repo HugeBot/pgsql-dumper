@@ -25,6 +25,7 @@ var (
 	date         time.Time
 	baseCommand  string
 	containerId  string
+	containerCLI string
 	allDatabases bool
 )
 
@@ -118,7 +119,8 @@ func init() {
 
 	flag.StringVar(&filePath, "config", "./config.yml", "Select where is located config file.")
 
-	flag.StringVar(&containerId, "container", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
+	flag.StringVar(&containerCLI, "cli", "docker", "Determine runtime command like docker (default), nerdctl, podman... must be a docker compatible CLI.")
+	flag.StringVar(&containerId, "cid", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
 
 	flag.Parse()
 
@@ -159,9 +161,9 @@ func buildCommand(destination string) *exec.Cmd {
 	if containerId == "" {
 		return exec.Command(baseCommand, "-Z5", "-Fc")
 	} else if allDatabases {
-		return exec.Command("docker", "exec", containerId, baseCommand, fmt.Sprintf("--dbname=postgresql://%s:%s@%s:%d", config.Database.Username, config.Database.Password, config.Database.Host, config.Database.Port))
+		return exec.Command(containerCLI, "exec", containerId, baseCommand, fmt.Sprintf("--dbname=postgresql://%s:%s@%s:%d", config.Database.Username, config.Database.Password, config.Database.Host, config.Database.Port))
 	} else {
-		return exec.Command("docker", "exec", containerId, baseCommand, "-Z5", "-Fc", fmt.Sprintf("--dbname=postgresql://%s:%s@%s:%d/%s", config.Database.Username, config.Database.Password, config.Database.Host, config.Database.Port, config.Database.Name))
+		return exec.Command(containerCLI, "exec", containerId, baseCommand, "-Z5", "-Fc", fmt.Sprintf("--dbname=postgresql://%s:%s@%s:%d/%s", config.Database.Username, config.Database.Password, config.Database.Host, config.Database.Port, config.Database.Name))
 	}
 }
 

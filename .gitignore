@@ -3,5 +3,6 @@
 
 *.yaml
 *.yml
+*.conf
 !*.example.yaml
 !*.example.yml
