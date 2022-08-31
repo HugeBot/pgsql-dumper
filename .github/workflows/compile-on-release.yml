@@ -24,8 +24,20 @@ jobs:
       with:
         go-version: 1.18
 
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+
+    - name: Setup FPM
+      run: gem install fpm && fpm --version
+
+    - name: Install extra dependencies
+      run: apt-get install squashfs-tools
+
     - name: Build executables
       run: ./compile.sh
+
+    - name: Build Debian Packages
+      run: ./fpm.sh
       
     - name: Publish executables to GitHub Release
       uses: softprops/action-gh-release@v1
