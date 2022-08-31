@@ -32,9 +32,6 @@ jobs:
     - name: Setup FPM
       run: gem install fpm && fpm --version
 
-    - name: Install extra dependencies
-      run: apt-get install squashfs-tools
-
     - name: Build executables
       run: ./compile.sh
 
