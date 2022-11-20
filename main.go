@@ -28,6 +28,8 @@ var (
 	containerCLI string
 	allDatabases bool
 
+	compressLevel int
+
 	Version = "unknown"
 )
 
@@ -123,6 +125,7 @@ func init() {
 
 	flag.StringVar(&containerCLI, "cli", "docker", "Determine runtime command like docker (default), nerdctl, podman... must be a docker compatible CLI.")
 	flag.StringVar(&containerId, "cid", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
+	flag.IntVar(&compressLevel, "compress", 5, "The compress level (default to 5)")
 
 	flag.Parse()
 
@@ -130,6 +133,10 @@ func init() {
 		printBanner()
 		flag.PrintDefaults()
 		os.Exit(0)
+	}
+
+	if compressLevel < 0 && compressLevel > 9 {
+		log.Fatalln("the compression level must be between 0 and 9 (both inclusive)")
 	}
 
 	config.init()
@@ -167,7 +174,7 @@ func buildCommand(destination string) *exec.Cmd {
 	} else if allDatabases {
 		return exec.Command(containerCLI, "exec", containerId, baseCommand, fmt.Sprintf("--dbname=postgresql://%s:%s@%s:%d", config.Database.Username, config.Database.Password, config.Database.Host, config.Database.Port))
 	} else {
-		return exec.Command(containerCLI, "exec", containerId, baseCommand, "-Z5", "-Fc", fmt.Sprintf("--dbname=postgresql://%s:%s@%s:%d/%s", config.Database.Username, config.Database.Password, config.Database.Host, config.Database.Port, config.Database.Name))
+		return exec.Command(containerCLI, "exec", containerId, baseCommand, fmt.Sprintf("-Z%d", compressLevel), "-Fc", fmt.Sprintf("--dbname=postgresql://%s:%s@%s:%d/%s", config.Database.Username, config.Database.Password, config.Database.Host, config.Database.Port, config.Database.Name))
 	}
 }
 
