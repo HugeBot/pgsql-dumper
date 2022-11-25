@@ -152,7 +152,7 @@ func printBanner() {
 	`, Version)
 }
 
-func prepareS3Connection() *s3manager.Uploader {
+func createUploader() *s3manager.Uploader {
 	sess := session.Must(session.NewSession(&aws.Config{
 		Region:      aws.String(config.S3.Region),
 		Credentials: credentials.NewStaticCredentials(config.S3.AccessKeyId, config.S3.AccessKeySecret, ""),
@@ -210,7 +210,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	result, err := prepareS3Connection().Upload(&s3manager.UploadInput{
+	result, err := createUploader().Upload(&s3manager.UploadInput{
 		Bucket: aws.String(config.S3.Bucket),
 		Key:    aws.String(fileName),
 		Body:   aws.ReadSeekCloser(out),
