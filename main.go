@@ -153,13 +153,11 @@ func printBanner() {
 }
 
 func prepareS3Connection() *s3manager.Uploader {
-	awsConfig := aws.NewConfig()
-
-	awsConfig.WithRegion(config.S3.Region)
-	awsConfig.WithEndpoint(config.S3.Endpoint)
-	awsConfig.WithCredentials(credentials.NewStaticCredentials(config.S3.AccessKeyId, config.S3.AccessKeySecret, ""))
-
-	sess := session.Must(session.NewSession(awsConfig))
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region:      aws.String(config.S3.Region),
+		Credentials: credentials.NewStaticCredentials(config.S3.AccessKeyId, config.S3.AccessKeySecret, ""),
+		Endpoint:    aws.String(config.S3.Endpoint),
+	}))
 
 	log.Println("successfully conected with S3 bucket")
 
