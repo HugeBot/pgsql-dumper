@@ -167,7 +167,7 @@ func createUploader() *s3manager.Uploader {
 // pg_dump -Z5 -Fc --dbname=postgresql://postgres:postgres@127.0.0.1:5432/hugebot
 func buildCommand(destination string) *exec.Cmd {
 	if containerId == "" {
-		return exec.Command(baseCommand, "-Z5", "-Fc")
+		return exec.Command(baseCommand, "-Z%d", "-Fc")
 	} else if allDatabases {
 		return exec.Command(containerCLI, "exec", containerId, baseCommand, fmt.Sprintf("--dbname=postgresql://%s:%s@%s:%d", config.Database.Username, config.Database.Password, config.Database.Host, config.Database.Port))
 	} else {
