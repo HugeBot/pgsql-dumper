@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -204,15 +203,19 @@ func main() {
 	cmd.Stderr = os.Stderr
 
 	log.Printf("Running command %v\n", cmd.Args)
-	out, err := cmd.Output()
+	out, err := cmd.StdoutPipe()
 	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
 
 	result, err := prepareS3Connection().Upload(&s3manager.UploadInput{
 		Bucket: aws.String(config.S3.Bucket),
 		Key:    aws.String(fileName),
-		Body:   aws.ReadSeekCloser(bytes.NewReader(out)),
+		Body:   aws.ReadSeekCloser(out),
 	})
 	if err != nil {
 		log.Fatal(err)
