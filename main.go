@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -11,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/HugeBot/pgsql-dumper/utils"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -19,15 +19,17 @@ import (
 )
 
 var (
-	config       *Config
-	filePath     string
-	date         time.Time
-	baseCommand  string
-	containerId  string
-	containerCLI string
-	allDatabases bool
+	config *Config
+	date   time.Time = time.Now()
 
-	compressLevel int
+	useHelp       bool   = *flag.Bool("help", false, "Show this help menu.")
+	filePath      string = *flag.String("config", "./config.yml", "Select where is located config file.")
+	baseCommand   string
+	containerId   string = *flag.String("cid", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
+	isPattern     bool   = *flag.Bool("is-pattern", false, "Define if 'cid' is a pattern (pgsql-*)")
+	containerCLI  string = *flag.String("cli", "docker", "Determine runtime command like docker (default), nerdctl, podman... must be a docker compatible CLI.")
+	allDatabases  bool   = *flag.Bool("all", false, "If defined will be dumped all the databases (pg_dumpall instead of pg_dump)")
+	compressLevel int    = *flag.Int("compress", 5, "The compress level (default to 5)")
 
 	Version = "unknown"
 )
@@ -60,7 +62,7 @@ func (c *Config) init() {
 		log.Fatal(err)
 	}
 
-	yamlFile, err := ioutil.ReadFile(file)
+	yamlFile, err := os.ReadFile(file)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -114,17 +116,6 @@ func (c *Config) init() {
 }
 
 func init() {
-	date = time.Now()
-
-	var useHelp bool
-	flag.BoolVar(&useHelp, "help", false, "Show this help menu.")
-	flag.BoolVar(&allDatabases, "all", false, "If defined will be dumped all the databases (pg_dumpall instead of pg_dump)")
-
-	flag.StringVar(&filePath, "config", "./config.yml", "Select where is located config file.")
-
-	flag.StringVar(&containerCLI, "cli", "docker", "Determine runtime command like docker (default), nerdctl, podman... must be a docker compatible CLI.")
-	flag.StringVar(&containerId, "cid", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
-	flag.IntVar(&compressLevel, "compress", 5, "The compress level (default to 5)")
 
 	flag.Parse()
 
@@ -135,7 +126,15 @@ func init() {
 	}
 
 	if compressLevel < 0 && compressLevel > 9 {
-		log.Fatalln("the compression level must be between 0 and 9 (both inclusive)")
+		log.Fatalln("the compression level must be between 0 and 9 inclusive")
+	}
+
+	if isPattern && len(containerId) > 0 {
+		if id, err := utils.GetContainerId(containerCLI, containerId); err != nil {
+			log.Fatal(err)
+		} else {
+			containerCLI = id
+		}
 	}
 
 	config.init()
