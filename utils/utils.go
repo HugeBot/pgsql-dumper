@@ -13,7 +13,7 @@ func GetContainerId(containerCLI string, contaierPattern string) (string, error)
 	var containerId string
 
 	if contaierPattern != "" {
-		cmd := exec.Command(containerCLI, "ps", "-afq", fmt.Sprintf("'name=^%s'", contaierPattern))
+		cmd := exec.Command(containerCLI, "ps", "-aqf", fmt.Sprintf("'name=^%s'", contaierPattern))
 		cmd.Stderr = os.Stderr
 
 		out, err := cmd.StdoutPipe()
