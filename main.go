@@ -22,14 +22,14 @@ var (
 	config *Config
 	date   time.Time = time.Now()
 
-	useHelp       bool   = *flag.Bool("help", false, "Show this help menu.")
-	filePath      string = *flag.String("config", "./config.yml", "Select where is located config file.")
+	useHelp       bool
+	filePath      string
 	baseCommand   string
-	containerId   string = *flag.String("cid", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
-	isPattern     bool   = *flag.Bool("is-pattern", false, "Define if 'cid' is a pattern (pgsql-*)")
-	containerCLI  string = *flag.String("cli", "docker", "Determine runtime command like docker (default), nerdctl, podman... must be a docker compatible CLI.")
-	allDatabases  bool   = *flag.Bool("all", false, "If defined will be dumped all the databases (pg_dumpall instead of pg_dump)")
-	compressLevel int    = *flag.Int("compress", 5, "The compress level (default to 5)")
+	containerId   string
+	isPattern     bool
+	containerCLI  string
+	allDatabases  bool
+	compressLevel int
 
 	Version = "unknown"
 )
@@ -116,6 +116,14 @@ func (c *Config) init() {
 }
 
 func init() {
+
+	flag.BoolVar(&useHelp, "help", false, "Show this help menu.")
+	flag.StringVar(&filePath, "config", "./config.yml", "Select where is located config file.")
+	flag.StringVar(&containerId, "cid", "", "Specific the ID (or name) of the container in which the instance of the database is running, this will avoid the requirement that the command is executed by the postgre user.")
+	flag.StringVar(&containerCLI, "cli", "docker", "Determine runtime command like docker (default), nerdctl, podman... must be a docker compatible CLI.")
+	flag.BoolVar(&isPattern, "is-pattern", false, "Define if 'cid' is a pattern (pgsql-*)")
+	flag.BoolVar(&allDatabases, "all", false, "If defined will be dumped all the databases (pg_dumpall instead of pg_dump)")
+	flag.IntVar(&compressLevel, "compress", 5, "The compress level (default to 5)")
 
 	flag.Parse()
 
