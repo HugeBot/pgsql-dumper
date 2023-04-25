@@ -22,12 +22,12 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18
+        go-version: 1.20
 
     - name: Setup Ruby
       uses: ruby/setup-ruby@v1
       with:
-        ruby-version: '3.0'
+        ruby-version: '3.2'
 
     - name: Setup FPM
       run: gem install fpm && fpm --version
