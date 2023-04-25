@@ -144,10 +144,11 @@ func init() {
 func printBanner() {
 	fmt.Printf(`
     ┌───────────────────────────────────────────────────┐
-    │                  PSQL DUMPER v%s               │
+    │                   PGSQL DUMPER                    │
     │                                                   │
-    │       https://github.com/HugeBot/psql-dumper      │
+    │      https://github.com/HugeBot/pgsql-dumper      │
     └───────────────────────────────────────────────────┘
+	 Version %s
 	
 	`, Version)
 }
