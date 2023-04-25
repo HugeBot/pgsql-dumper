@@ -141,7 +141,7 @@ func init() {
 		if id, err := utils.GetContainerId(containerCLI, containerId); err != nil {
 			log.Fatal(err)
 		} else {
-			containerCLI = id
+			containerId = id
 		}
 	}
 
