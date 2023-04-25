@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 func GetContainerId(containerCLI string, contaierPattern string) (string, error) {
@@ -31,7 +32,7 @@ func GetContainerId(containerCLI string, contaierPattern string) (string, error)
 			return containerId, err
 		}
 
-		containerId = string(byteArray)
+		containerId = strings.Split(string(byteArray), "\n")[0]
 
 		if containerId == "" {
 			return containerId, fmt.Errorf("container pattern %s not correspond to existing container", contaierPattern)
