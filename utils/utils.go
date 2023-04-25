@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 )
@@ -20,6 +21,7 @@ func GetContainerId(containerCLI string, contaierPattern string) (string, error)
 			return containerId, err
 		}
 
+		log.Printf("Running command %v\n", cmd.Args)
 		if err := cmd.Start(); err != nil {
 			return containerId, err
 		}
@@ -32,7 +34,7 @@ func GetContainerId(containerCLI string, contaierPattern string) (string, error)
 		containerId = string(byteArray)
 
 		if containerId == "" {
-			return containerId, fmt.Errorf("container pattern %s not correspond to existing container", containerId)
+			return containerId, fmt.Errorf("container pattern %s not correspond to existing container", contaierPattern)
 		}
 
 		return containerId, nil
